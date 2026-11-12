@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zeytin Sıkımhanesi - Müşteri Kabul & QR Takip Sistemi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        olive: {
+                            50: '#f7f9f4',
+                            100: '#ecf1e4',
+                            200: '#d7e3c8',
+                            300: '#b8cda0',
+                            400: '#94b274',
+                            500: '#749452',
+                            600: '#59753d',
+                            700: '#465c31',
+                            800: '#394b2a',
+                            900: '#314025',
+                            950: '#1c2615'
+                        },
+                        cream: '#fdfcf8',
+                        gold: {
+                            400: '#facc15',
+                            500: '#d4af37',
+                            600: '#b59224',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .qr-wrapper svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+            shape-rendering: crispEdges;
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-receipt-area, #printable-receipt-area * {
+                visibility: visible;
+            }
+            #printable-receipt-area {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 80mm;
+                max-width: 100%;
+                margin: 0;
+                padding: 8px;
+                background: #ffffff !important;
+                color: #000000 !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-olive-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- ÜST BAŞLIK -->
+    <header class="bg-olive-800 text-white shadow-md border-b-4 border-gold-500 sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3.5">
+                <div class="bg-gold-500 text-olive-950 p-2.5 rounded-xl shadow-inner shrink-0">
+                    <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22c4.5-3.5 8-8.5 8-14-5.5 0-10.5 3.5-14 8"/>
+                        <ellipse cx="14.5" cy="13.5" rx="3.5" ry="5" transform="rotate(-35 14.5 13.5)" fill="currentColor"/>
+                        <ellipse cx="8.5" cy="9.5" rx="2.8" ry="4" transform="rotate(-35 8.5 9.5)"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white">
+                        ZEYTİN SIKIMHANESİ OTOMASYONU
+                    </h1>
+                    <p class="text-olive-200 text-xs sm:text-sm font-medium">
+                        Müşteri Kabul, Canlı QR Takip & Onaylı Sıkım Yönetimi
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+                <div class="bg-olive-900/90 px-4 py-2 rounded-xl border border-olive-700 text-right">
+                    <div id="live-date" class="text-xs text-olive-300 font-medium">--.--.----</div>
+                    <div id="live-clock" class="text-base sm:text-lg font-bold text-gold-400 tabular-nums">00:00:00</div>
+                </div>
+                <button type="button" onclick="exportToCSV()" class="bg-olive-700 hover:bg-olive-600 active:scale-95 transition text-white px-4 py-3 rounded-xl font-bold text-sm flex items-center gap-2 border border-olive-600 shadow-sm cursor-pointer">
+                    <svg class="w-5 h-5 text-gold-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                    <span>Excel İndir</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- BİLDİRİM TOAST ALANI -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ANA İÇERİK -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- İSTATİSTİK KARTLARI -->
+        <section class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-cream rounded-2xl p-4 sm:p-5 shadow-sm border border-olive-200">
+                <p class="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wide">Toplam Gelen Zeytin</p>
+                <p class="text-2xl sm:text-3xl font-black text-olive-800 mt-1">
+                    <span id="stat-total-kg">0</span> <span class="text-sm font-bold text-olive-600">KG</span>
+                </p>
+            </div>
+            <div class="bg-cream rounded-2xl p-4 sm:p-5 shadow-sm border border-olive-200">
+                <p class="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wide">Bekleyen Parti</p>
+                <p class="text-2xl sm:text-3xl font-black text-amber-600 mt-1" id="stat-waiting-count">0</p>
+            </div>
+            <div class="bg-cream rounded-2xl p-4 sm:p-5 shadow-sm border border-olive-200">
+                <p class="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wide">Şu An Sıkımda</p>
+                <p class="text-2xl sm:text-3xl font-black text-blue-700 mt-1" id="stat-pressing-count">0</p>
+            </div>
+            <div class="bg-cream rounded-2xl p-4 sm:p-5 shadow-sm border border-olive-200">
+                <p class="text-xs sm:text-sm font-bold text-slate-500 uppercase tracking-wide">Tamamlanan</p>
+                <p class="text-2xl sm:text-3xl font-black text-emerald-700 mt-1" id="stat-done-count">0</p>
+            </div>
+        </section>
+
+        <!-- FORM VE CANLI FİŞ / QR ÖNİZLEME -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- SOL: MÜŞTERİ KABUL FORMU -->
+            <div class="lg:col-span-7 bg-cream rounded-2xl shadow-sm border border-olive-200 overflow-hidden">
+                <div class="bg-olive-700 px-6 py-4 flex items-center justify-between text-white">
+                    <h2 class="font-bold text-lg flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-gold-400"></span>
+                        Yeni Müşteri & Zeytin Girişi
+                    </h2>
+                    <span id="next-batch-badge" class="bg-olive-900 text-gold-400 font-mono text-xs sm:text-sm font-bold px-3 py-1 rounded-lg border border-olive-600">
+                        ZYT-2026-001
+                    </span>
+                </div>
+
+                <form id="olive-form" class="p-6 space-y-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                            <label for="customerName" class="block text-sm font-bold text-slate-700 mb-1.5">
+                                Müşteri Adı Soyadı <span class="text-red-600">*</span>
+                            </label>
+                            <input type="text" id="customerName" required placeholder="Örn: Mustafa Özkan"
+                                class="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 focus:ring-2 focus:ring-olive-200 outline-none text-base font-semibold transition">
+                        </div>
+
+                        <div>
+                            <label for="oliveWeight" class="block text-sm font-bold text-slate-700 mb-1.5">
+                                Gelen Zeytin Miktarı (kg) <span class="text-red-600">*</span>
+                            </label>
+                            <div class="relative">
+                                <input type="number" id="oliveWeight" required min="1" step="0.5" placeholder="Örn: 520"
+                                    class="w-full pl-4 pr-12 py-3.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 focus:ring-2 focus:ring-olive-200 outline-none text-base font-extrabold text-olive-900 transition">
+                                <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-extrabold text-slate-400">KG</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="customerPhone" class="block text-sm font-bold text-slate-700 mb-1.5">
+                                Telefon <span class="text-slate-400 font-normal text-xs">(İsteğe Bağlı)</span>
+                            </label>
+                            <input type="tel" id="customerPhone" placeholder="05XX XXX XX XX"
+                                class="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 focus:ring-2 focus:ring-olive-200 outline-none text-base font-medium transition">
+                        </div>
+
+                        <div>
+                            <label for="crateCount" class="block text-sm font-bold text-slate-700 mb-1.5">
+                                Kasa / Çuval Adedi <span class="text-slate-400 font-normal text-xs">(İsteğe Bağlı)</span>
+                            </label>
+                            <input type="text" id="crateCount" placeholder="Örn: 14 kasa / 6 çuval"
+                                class="w-full px-4 py-3.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 focus:ring-2 focus:ring-olive-200 outline-none text-base font-medium transition">
+                        </div>
+                    </div>
+
+                    <!-- SADECE 2 SEÇENEKLİ BÜYÜK KART RADYO BUTONLARI -->
+                    <div>
+                        <span class="block text-sm font-bold text-slate-700 mb-2">
+                            Sıkım Türü Seçiniz <span class="text-red-600">*</span>
+                        </span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="oliveType" value="Soğuk Sıkım" checked class="peer sr-only">
+                                <div class="p-4 rounded-xl border-2 border-slate-200 bg-white peer-checked:border-cyan-600 peer-checked:bg-cyan-50/70 transition flex items-center gap-3 shadow-xs">
+                                    <div class="w-10 h-10 rounded-xl bg-cyan-100 text-cyan-800 flex items-center justify-center shrink-0 font-black">
+                                        ❄️
+                                    </div>
+                                    <div>
+                                        <div class="font-extrabold text-slate-900 text-base">Soğuk Sıkım</div>
+                                        <div class="text-xs text-slate-500 font-medium">27°C altı düşük ısı sıkım</div>
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="cursor-pointer">
+                                <input type="radio" name="oliveType" value="Normal Sıkım" class="peer sr-only">
+                                <div class="p-4 rounded-xl border-2 border-slate-200 bg-white peer-checked:border-amber-600 peer-checked:bg-amber-50/70 transition flex items-center gap-3 shadow-xs">
+                                    <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 font-black">
+                                        🌿
+                                    </div>
+                                    <div>
+                                        <div class="font-extrabold text-slate-900 text-base">Normal Sıkım</div>
+                                        <div class="text-xs text-slate-500 font-medium">Standart üretim sıkım hattı</div>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full bg-olive-700 hover:bg-olive-800 active:scale-[0.99] text-white font-extrabold text-lg py-4 px-6 rounded-xl shadow-md transition flex items-center justify-center gap-3 border-b-4 border-olive-900 cursor-pointer">
+                        <svg class="w-6 h-6 text-gold-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h6v6H3V3zm12 0h6v6h-6V3zM3 15h6v6H3v-6zm12 0h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2zm-2-2h2v2h-2v-2z"/>
+                        </svg>
+                        <span>Kaydet ve Otomatik QR Kod Oluştur</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- SAĞ: CANLI TERMAL FİŞ & QR ÖNİZLEME KARTI -->
+            <div class="lg:col-span-5 bg-cream rounded-2xl shadow-sm border border-olive-200 overflow-hidden">
+                <div class="bg-slate-800 px-6 py-4 flex items-center justify-between text-white">
+                    <h2 class="font-bold text-lg">Canlı Müşteri Fişi & QR</h2>
+                    <span class="text-xs bg-emerald-600 text-white font-bold px-2.5 py-1 rounded-md">Gömülü Motor Aktif</span>
+                </div>
+
+                <div id="preview-empty" class="p-10 text-center space-y-3">
+                    <div class="w-16 h-16 mx-auto rounded-2xl bg-olive-100 text-olive-600 flex items-center justify-center font-mono font-bold text-xl border border-olive-200">
+                        QR
+                    </div>
+                    <h3 class="font-bold text-slate-700">Kayıt Bekleniyor</h3>
+                    <p class="text-sm text-slate-500">
+                        Formu doldurup kaydettiğinizde yüksek çözünürlüklü QR kodlu müşteri fişi burada anında oluşturulacaktır.
+                    </p>
+                </div>
+
+                <div id="preview-content" class="hidden p-6 space-y-5">
+                    <div class="bg-white border-2 border-dashed border-slate-300 rounded-xl p-5 shadow-inner space-y-4">
+                        <div class="flex items-start justify-between border-b border-slate-200 pb-3">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span id="prev-batch" class="inline-block bg-olive-800 text-gold-400 font-mono text-xs font-extrabold px-2.5 py-1 rounded">
+                                        ZYT-2026-001
+                                    </span>
+                                    <span id="prev-status-pill" class="inline-block bg-amber-100 text-amber-900 text-[11px] font-extrabold px-2 py-0.5 rounded">
+                                        Bekliyor
+                                    </span>
+                                </div>
+                                <h3 id="prev-name" class="text-xl font-black text-slate-900 mt-1.5">Mustafa Özkan</h3>
+                                <p id="prev-type" class="text-xs font-bold text-olive-700 mt-0.5">Soğuk Sıkım</p>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-xs font-bold text-slate-400 block">MİKTAR</span>
+                                <span id="prev-weight" class="text-2xl font-black text-olive-700">520 KG</span>
+                                <span id="prev-date" class="text-[11px] text-slate-400 block mt-1">12.11.2026</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col items-center justify-center py-2">
+                            <div id="prev-qr-box" class="qr-wrapper w-44 h-44 bg-white p-2 border border-slate-200 rounded-xl shadow-sm"></div>
+                            <span class="text-[11px] font-mono text-slate-500 mt-2 text-center">
+                                Müşteri telefon kamerasıyla okutup canlı durumu görebilir
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" onclick="openReceiptModal(selectedRecordId)"
+                            class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-extrabold py-3.5 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z"/>
+                            </svg>
+                            <span>Fişi Yazdır</span>
+                        </button>
+                        <button type="button" onclick="downloadQRAsPNG(selectedRecordId)"
+                            class="bg-olive-800 hover:bg-olive-900 active:scale-95 text-white font-extrabold py-3.5 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm cursor-pointer">
+                            <svg class="w-5 h-5 text-gold-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                            <span>QR İndir (PNG)</span>
+                        </button>
+                        <button type="button" onclick="openEditModal(selectedRecordId)"
+                            class="col-span-2 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white font-extrabold py-3 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm cursor-pointer">
+                            <svg class="w-4 h-4 text-gold-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                            </svg>
+                            <span>Düzenle / Sıkım Türü Değiştir (Onaylı)</span>
+                        </button>
+                        <button type="button" onclick="openCustomerTracking(selectedRecordId)"
+                            class="col-span-2 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-extrabold py-3 px-4 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm border-b-2 border-emerald-950 cursor-pointer">
+                            <svg class="w-5 h-5 text-gold-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                            </svg>
+                            <span>Müşteri Gözüyle Gör / QR Simüle Et</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ALT BÖLÜM: MÜŞTERİ KAYIT LİSTESİ -->
+        <section class="bg-cream rounded-2xl shadow-sm border border-olive-200 overflow-hidden">
+            <div class="p-5 border-b border-olive-200 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 bg-olive-100/50">
+                <div>
+                    <h2 class="font-extrabold text-lg text-olive-900">Kayıtlı Müşteriler ve Parti Listesi</h2>
+                    <p class="text-xs text-slate-600">Sıkım türü veya müşteri bilgisi değişikliklerinde onay penceresi açılır.</p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="searchInput" placeholder="İsim, Parti No veya Telefon ara..."
+                        class="w-full sm:w-64 px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 outline-none text-sm font-medium">
+
+                    <select id="statusFilter"
+                        class="px-4 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 outline-none text-sm font-bold text-slate-700">
+                        <option value="ALL">Tüm Durumlar</option>
+                        <option value="Bekliyor">Bekliyor</option>
+                        <option value="Sıkımda">Sıkımda</option>
+                        <option value="Tamamlandı">Tamamlandı</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-olive-200/60 text-olive-950 text-xs uppercase tracking-wider border-b border-olive-200">
+                            <th class="py-3.5 px-4 font-extrabold">QR Kod</th>
+                            <th class="py-3.5 px-4 font-extrabold">Parti No</th>
+                            <th class="py-3.5 px-4 font-extrabold">Müşteri Adı Soyadı</th>
+                            <th class="py-3.5 px-4 font-extrabold">Miktar</th>
+                            <th class="py-3.5 px-4 font-extrabold">Sıkım Türü / Kasa</th>
+                            <th class="py-3.5 px-4 font-extrabold">Durum Değiştir</th>
+                            <th class="py-3.5 px-4 font-extrabold text-right">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody id="records-tbody" class="divide-y divide-olive-100 bg-white text-sm"></tbody>
+                </table>
+            </div>
+
+            <div id="empty-table-state" class="hidden py-12 text-center text-slate-500 font-semibold">
+                Arama kriterlerine uygun kayıt bulunamadı.
+            </div>
+        </section>
+    </main>
+
+    <!-- YAZDIRILABİLİR TERMAL FİŞ MODALI -->
+    <div id="receipt-modal" class="fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="bg-olive-800 text-white px-5 py-3.5 flex items-center justify-between no-print">
+                <span class="font-bold">Termal Fiş & Etiket Yazdırma</span>
+                <button type="button" onclick="closeReceiptModal()" class="text-olive-200 hover:text-white font-bold text-lg px-2 cursor-pointer">✕</button>
+            </div>
+
+            <div class="p-6 overflow-y-auto bg-slate-100 flex justify-center">
+                <div id="printable-receipt-area" class="bg-white w-full max-w-[300px] p-5 rounded-xl border border-slate-300 text-black font-mono text-xs space-y-3">
+                    <div class="text-center border-b-2 border-dashed border-black pb-3">
+                        <div class="font-sans font-black text-base">ZEYTİN SIKIMHANESİ</div>
+                        <div class="text-[11px]">MÜŞTERİ ZEYTİN KABUL FİŞİ</div>
+                        <div id="m-batch" class="mt-2 inline-block bg-black text-white font-bold px-3 py-1 rounded text-xs">
+                            ZYT-2026-001
+                        </div>
+                    </div>
+
+                    <div class="space-y-1.5 border-b-2 border-dashed border-black pb-3">
+                        <div class="flex justify-between">
+                            <span>TARİH:</span>
+                            <span id="m-date" class="font-bold">12.11.2026</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>MÜŞTERİ:</span>
+                            <span id="m-name" class="font-bold text-right">Mustafa Özkan</span>
+                        </div>
+                        <div id="m-phone-row" class="flex justify-between">
+                            <span>TELEFON:</span>
+                            <span id="m-phone" class="font-bold">0500 000 00 00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>SIKIM TÜRÜ:</span>
+                            <span id="m-type" class="font-bold text-right">Soğuk Sıkım</span>
+                        </div>
+                        <div class="flex justify-between items-center pt-1.5 border-t border-slate-300">
+                            <span class="font-bold text-sm">NET MİKTAR:</span>
+                            <span id="m-weight" class="font-black text-lg">520 KG</span>
+                        </div>
+                        <div id="m-notes" class="text-[11px] pt-1 italic"></div>
+                    </div>
+
+                    <div class="flex flex-col items-center justify-center py-2">
+                        <div id="m-qr-box" class="qr-wrapper w-40 h-40 p-1 bg-white"></div>
+                        <span class="text-[10px] text-center mt-2">
+                            QR kodu telefonunuzla okutarak zeytininizin sıkım durumunu canlı takip edebilirsiniz.
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-white border-t border-slate-200 flex flex-wrap gap-2 no-print">
+                <button type="button" onclick="window.print()" class="flex-1 bg-olive-700 hover:bg-olive-800 text-white font-bold py-3 px-3 rounded-xl shadow transition text-sm cursor-pointer">
+                    Yazdır
+                </button>
+                <button type="button" onclick="openEditModal(modalRecordId)" class="bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 px-3 rounded-xl transition text-sm cursor-pointer">
+                    Düzenle
+                </button>
+                <button type="button" onclick="openCustomerTracking(modalRecordId)" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3 px-3 rounded-xl transition text-sm cursor-pointer">
+                    Müşteri Ekranı
+                </button>
+                <button type="button" onclick="downloadQRAsPNG(modalRecordId)" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-3 px-3 rounded-xl transition text-sm cursor-pointer">
+                    PNG İndir
+                </button>
+                <button type="button" onclick="closeReceiptModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-3 px-3 rounded-xl transition text-sm cursor-pointer">
+                    Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KAYIT DÜZENLEME MODALI -->
+    <div id="edit-modal" class="fixed inset-0 bg-slate-900/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[92vh]">
+            <div class="bg-olive-800 text-white px-6 py-4 flex items-center justify-between">
+                <div>
+                    <h3 class="font-extrabold text-lg">Kayıt & Sıkım Türü Düzenle</h3>
+                    <p id="edit-batch-subtitle" class="text-xs text-gold-400 font-mono font-bold mt-0.5">ZYT-2026-001</p>
+                </div>
+                <button type="button" onclick="closeEditModal()" class="text-olive-200 hover:text-white font-bold text-lg px-2 cursor-pointer">✕</button>
+            </div>
+
+            <form id="edit-form" class="p-6 space-y-4 overflow-y-auto">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="editCustomerName" class="block text-xs font-extrabold text-slate-700 uppercase mb-1">
+                            Müşteri Adı Soyadı <span class="text-red-600">*</span>
+                        </label>
+                        <input type="text" id="editCustomerName" required
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 outline-none text-sm font-bold">
+                    </div>
+
+                    <div>
+                        <label for="editOliveWeight" class="block text-xs font-extrabold text-slate-700 uppercase mb-1">
+                            Zeytin Miktarı (kg) <span class="text-red-600">*</span>
+                        </label>
+                        <input type="number" id="editOliveWeight" required min="1" step="0.5"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 outline-none text-sm font-extrabold text-olive-900">
+                    </div>
+
+                    <div>
+                        <label for="editCustomerPhone" class="block text-xs font-extrabold text-slate-700 uppercase mb-1">
+                            Telefon
+                        </label>
+                        <input type="tel" id="editCustomerPhone"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 outline-none text-sm font-medium">
+                    </div>
+
+                    <div>
+                        <label for="editCrateCount" class="block text-xs font-extrabold text-slate-700 uppercase mb-1">
+                            Kasa / Çuval Adedi
+                        </label>
+                        <input type="text" id="editCrateCount"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white focus:border-olive-600 outline-none text-sm font-medium">
+                    </div>
+                </div>
+
+                <div>
+                    <span class="block text-xs font-extrabold text-slate-700 uppercase mb-1.5">
+                        Sıkım Türü <span class="text-red-600">*</span>
+                    </span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="editOliveType" value="Soğuk Sıkım" class="peer sr-only">
+                            <div class="p-3 rounded-xl border-2 border-slate-200 bg-white peer-checked:border-cyan-600 peer-checked:bg-cyan-50 transition text-center font-extrabold text-sm text-slate-900">
+                                ❄️ Soğuk Sıkım
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="editOliveType" value="Normal Sıkım" class="peer sr-only">
+                            <div class="p-3 rounded-xl border-2 border-slate-200 bg-white peer-checked:border-amber-600 peer-checked:bg-amber-50 transition text-center font-extrabold text-sm text-slate-900">
+                                🌿 Normal Sıkım
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 font-semibold">
+                    Kaydet butonuna bastığınızda değişikliklerin özeti gösterilecek ve onayınız istenecektir.
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <button type="button" onclick="closeEditModal()"
+                        class="flex-1 py-3 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-sm transition cursor-pointer">
+                        İptal
+                    </button>
+                    <button type="submit"
+                        class="flex-1 py-3 px-4 rounded-xl bg-olive-700 hover:bg-olive-800 text-white font-extrabold text-sm shadow transition cursor-pointer">
+                        Değişiklikleri İncele
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- DEĞİŞİKLİĞİ ONAYLA MODALI -->
+    <div id="confirm-update-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-olive-200">
+            <div class="bg-amber-500 text-slate-950 px-6 py-4 flex items-center gap-3">
+                <div class="bg-slate-950 text-amber-400 p-2 rounded-xl shrink-0">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="font-black text-base sm:text-lg leading-tight">Değişikliği Onayla</h3>
+                    <p id="confirm-update-batch" class="text-xs font-mono font-extrabold text-slate-900">ZYT-2026-001</p>
+                </div>
+            </div>
+
+            <div class="p-6 space-y-4">
+                <p class="text-sm text-slate-700 font-semibold">
+                    Aşağıdaki değişiklikler kayda uygulanacak ve müşterinin QR kodu ile fiş bilgileri otomatik güncellenecektir:
+                </p>
+
+                <div id="confirm-diff-list" class="bg-olive-50 border border-olive-200 rounded-xl p-4 space-y-2.5 text-xs sm:text-sm"></div>
+
+                <label class="flex items-start gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200 cursor-pointer select-none">
+                    <input type="checkbox" id="confirm-update-checkbox" onchange="toggleConfirmUpdateBtn()"
+                        class="mt-0.5 w-4 h-4 accent-olive-700 rounded cursor-pointer">
+                    <span class="text-xs font-bold text-slate-700">
+                        Değişiklikleri kontrol ettim, onaylıyorum.
+                    </span>
+                </label>
+
+                <div class="flex gap-3 pt-1">
+                    <button type="button" onclick="closeConfirmUpdateModal()"
+                        class="flex-1 py-3 px-4 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-sm transition cursor-pointer">
+                        Vazgeç
+                    </button>
+                    <button type="button" id="apply-update-btn" onclick="applyPendingUpdate()" disabled
+                        class="flex-1 py-3 px-4 rounded-xl bg-emerald-700 hover:bg-emerald-800 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-extrabold text-sm shadow transition cursor-pointer">
+                        Güncellemeyi Onayla
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MÜŞTERİ CANLI TAKİP EKRANI (QR OKUTULDUĞUNDA AÇILAN MOBİL GÖRÜNÜM) -->
+    <div id="customer-tracking-view" class="fixed inset-0 bg-olive-50 z-50 hidden overflow-y-auto flex-col">
+        <div class="bg-olive-900 text-white px-4 py-4 shadow-md border-b-4 border-gold-500">
+            <div class="max-w-lg mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="bg-gold-500 text-olive-950 p-2 rounded-xl">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22c4.5-3.5 8-8.5 8-14-5.5 0-10.5 3.5-14 8"/>
+                            <ellipse cx="14.5" cy="13.5" rx="3.5" ry="5" transform="rotate(-35 14.5 13.5)" fill="currentColor"/>
+                            <ellipse cx="8.5" cy="9.5" rx="2.8" ry="4" transform="rotate(-35 8.5 9.5)"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-black text-base sm:text-lg tracking-tight">ZEYTİN SIKIM TAKİP</h1>
+                        <p class="text-olive-200 text-xs">Canlı Parti & Sıkım Durumu</p>
+                    </div>
+                </div>
+                <span class="bg-olive-800 text-gold-400 text-[11px] font-bold px-2.5 py-1 rounded-full border border-olive-700 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Canlı
+                </span>
+            </div>
+        </div>
+
+        <div class="flex-grow max-w-lg w-full mx-auto px-4 py-6 space-y-5">
+            <div class="bg-cream rounded-3xl shadow-lg border border-olive-200 overflow-hidden">
+                <div class="bg-olive-800 text-white p-6">
+                    <div class="flex items-center justify-between gap-2">
+                        <span id="ct-batch" class="bg-gold-500 text-olive-950 font-mono font-black text-xs sm:text-sm px-3 py-1 rounded-lg">
+                            ZYT-2026-001
+                        </span>
+                        <span id="ct-date" class="text-xs text-olive-200 font-medium">12.11.2026 14:30</span>
+                    </div>
+                    <h2 id="ct-name" class="text-2xl sm:text-3xl font-black mt-3 tracking-tight">Müşteri Adı</h2>
+                    <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                        <span class="bg-olive-900/80 border border-olive-700 px-3 py-1.5 rounded-xl font-bold text-gold-400">
+                            Miktar: <span id="ct-weight" class="text-white">0 KG</span>
+                        </span>
+                        <span id="ct-type" class="bg-olive-900/80 border border-olive-700 px-3 py-1.5 rounded-xl font-medium text-olive-100">
+                            Soğuk Sıkım
+                        </span>
+                    </div>
+                </div>
+
+                <div class="p-6 space-y-6">
+                    <div id="ct-status-banner" class="rounded-2xl p-5 border-2 text-center space-y-2 transition-all">
+                        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-1" id="ct-status-icon"></div>
+                        <div id="ct-status-badge" class="text-xl sm:text-2xl font-black uppercase tracking-wide">
+                            BEKLİYOR
+                        </div>
+                        <p id="ct-status-desc" class="text-sm sm:text-base font-semibold leading-relaxed">
+                            Zeytininiz sıkım sırası beklemektedir.
+                        </p>
+                    </div>
+
+                    <div class="space-y-3 pt-2">
+                        <div class="flex items-center justify-between text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                            <span>Süreç Aşamaları</span>
+                            <span id="ct-step-text" class="text-olive-700">Aşama 1 / 3</span>
+                        </div>
+
+                        <div class="relative pt-2">
+                            <div class="h-2.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div id="ct-progress-bar" class="h-full bg-olive-600 transition-all duration-500 rounded-full" style="width: 33%"></div>
+                            </div>
+
+                            <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+                                <div id="ct-step-1" class="p-2.5 rounded-xl border transition">
+                                    <div class="w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot">1</div>
+                                    <div class="font-extrabold text-xs">Sıraya Alındı</div>
+                                    <div class="text-[10px] opacity-80">Bekliyor</div>
+                                </div>
+                                <div id="ct-step-2" class="p-2.5 rounded-xl border transition">
+                                    <div class="w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot">2</div>
+                                    <div class="font-extrabold text-xs">Şu An Sıkımda</div>
+                                    <div class="text-[10px] opacity-80">İşleniyor</div>
+                                </div>
+                                <div id="ct-step-3" class="p-2.5 rounded-xl border transition">
+                                    <div class="w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot">3</div>
+                                    <div class="font-extrabold text-xs">Tamamlandı</div>
+                                    <div class="text-[10px] opacity-80">Teslime Hazır</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="ct-notes-box" class="hidden bg-olive-100/70 border border-olive-200 rounded-xl p-3.5 text-xs text-olive-900 font-medium">
+                        <span class="font-extrabold">Kasa / Çuval Bilgisi:</span> <span id="ct-notes"></span>
+                    </div>
+
+                    <div class="pt-2 space-y-3">
+                        <button type="button" onclick="refreshCustomerTracking()"
+                            class="w-full bg-olive-700 hover:bg-olive-800 active:scale-[0.99] text-white font-extrabold py-3.5 px-5 rounded-2xl shadow-md transition flex items-center justify-center gap-2 text-base cursor-pointer">
+                            <svg class="w-5 h-5 text-gold-400" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                            <span>Durumu Yenile</span>
+                        </button>
+                        <p id="ct-last-checked" class="text-center text-[11px] text-slate-400 font-medium">
+                            Son kontrol: Az önce
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center pb-6">
+                <button type="button" onclick="exitCustomerTracking()"
+                    class="inline-flex items-center gap-2 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl border border-slate-300 shadow-xs transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    <span>Fabrika Paneline Dön</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SİLME ONAY MODALI -->
+    <div id="delete-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center space-y-4">
+            <h3 class="text-lg font-extrabold text-slate-900">Kaydı Silmek İstiyor Musunuz?</h3>
+            <p id="delete-msg" class="text-sm text-slate-600">Bu işlem geri alınamaz.</p>
+            <div class="flex gap-3 pt-2">
+                <button type="button" onclick="closeDeleteModal()" class="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-sm cursor-pointer">Vazgeç</button>
+                <button type="button" id="confirm-del-btn" class="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm cursor-pointer">Evet, Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- SIFIR DIŞ BAĞIMLILIKLI SAF JAVASCRIPT QR KOD ÜRETİCİ MOTORU (INLINE)   -->
+    <!-- ISO/IEC 18004 Standart Versiyon 1-14 Otomatik Kapasite Seçimli        -->
+    <!-- ===================================================================== -->
+    <script>
+        const PureQR = (function() {
+            const EXP = new Array(512);
+            const LOG = new Array(256);
+            let x = 1;
+            for (let i = 0; i < 255; i++) {
+                EXP[i] = x;
+                LOG[x] = i;
+                x <<= 1;
+                if (x & 0x100) x ^= 0x11d;
+            }
+            for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
+
+            function gfMul(a, b) {
+                if (a === 0 || b === 0) return 0;
+                return EXP[LOG[a] + LOG[b]];
+            }
+
+            function getRSGeneratorPoly(degree) {
+                let poly = [1];
+                for (let i = 0; i < degree; i++) {
+                    const next = new Array(poly.length + 1).fill(0);
+                    const factor = EXP[i];
+                    for (let j = 0; j < poly.length; j++) {
+                        next[j] ^= poly[j];
+                        next[j + 1] ^= gfMul(poly[j], factor);
+                    }
+                    poly = next;
+                }
+                return poly;
+            }
+
+            function computeRS(data, ecCount) {
+                const gen = getRSGeneratorPoly(ecCount);
+                const res = new Array(ecCount).fill(0);
+                for (let i = 0; i < data.length; i++) {
+                    const coef = data[i] ^ res[0];
+                    res.shift();
+                    res.push(0);
+                    if (coef !== 0) {
+                        for (let j = 0; j < ecCount; j++) {
+                            res[j] ^= gfMul(gen[j + 1], coef);
+                        }
+                    }
+                }
+                return res;
+            }
+
+            // Versiyon 1 - 14 Kapasiteleri (ECC Level L, Byte Mode)
+            const VERSIONS = [
+                null,
+                { ver: 1,  size: 21, totalData: 19,  ecPerBlock: 7,  blocks: 1, align: [] },
+                { ver: 2,  size: 25, totalData: 34,  ecPerBlock: 10, blocks: 1, align: [6, 18] },
+                { ver: 3,  size: 29, totalData: 55,  ecPerBlock: 15, blocks: 1, align: [6, 22] },
+                { ver: 4,  size: 33, totalData: 80,  ecPerBlock: 20, blocks: 1, align: [6, 26] },
+                { ver: 5,  size: 37, totalData: 108, ecPerBlock: 26, blocks: 1, align: [6, 30] },
+                { ver: 6,  size: 41, totalData: 136, ecPerBlock: 18, blocks: 2, align: [6, 34] },
+                { ver: 7,  size: 45, totalData: 156, ecPerBlock: 20, blocks: 2, align: [6, 22, 38] },
+                { ver: 8,  size: 49, totalData: 194, ecPerBlock: 24, blocks: 2, align: [6, 24, 42] },
+                { ver: 9,  size: 53, totalData: 232, ecPerBlock: 30, blocks: 2, align: [6, 26, 46] },
+                { ver: 10, size: 57, totalData: 274, ecPerBlock: 18, blocks: 4, align: [6, 28, 50] },
+                { ver: 11, size: 61, totalData: 324, ecPerBlock: 20, blocks: 4, align: [6, 30, 54] },
+                { ver: 12, size: 65, totalData: 370, ecPerBlock: 24, blocks: 4, align: [6, 32, 58] },
+                { ver: 13, size: 69, totalData: 428, ecPerBlock: 26, blocks: 4, align: [6, 34, 62] },
+                { ver: 14, size: 73, totalData: 461, ecPerBlock: 30, blocks: 4, align: [6, 26, 46, 66] }
+            ];
+
+            const VERSION_INFO_BITS = [
+                0, 0, 0, 0, 0, 0, 0,
+                0x07c94, 0x085bc, 0x09a99, 0x0a4d3, 0x0bbf6, 0x0c762, 0x0d847, 0x0e60d
+            ];
+
+            function toUTF8Bytes(str) {
+                return Array.from(new TextEncoder().encode(str));
+            }
+
+            function selectVersion(byteLen) {
+                for (let v = 1; v < VERSIONS.length; v++) {
+                    const headerBits = v <= 9 ? 12 : 20;
+                    const capacityBytes = Math.floor((VERSIONS[v].totalData * 8 - headerBits) / 8);
+                    if (byteLen <= capacityBytes) return VERSIONS[v];
+                }
+                return VERSIONS[VERSIONS.length - 1];
+            }
+
+            function buildCodewords(bytes, vInfo) {
+                const bits = [];
+                const pushBits = (val, len) => {
+                    for (let i = len - 1; i >= 0; i--) bits.push((val >>> i) & 1);
+                };
+
+                pushBits(0b0100, 4);
+                const countLen = vInfo.ver <= 9 ? 8 : 16;
+                const maxBytes = Math.floor((vInfo.totalData * 8 - (4 + countLen)) / 8);
+                const payload = bytes.slice(0, maxBytes);
+                pushBits(payload.length, countLen);
+
+                for (const b of payload) pushBits(b, 8);
+
+                const totalBits = vInfo.totalData * 8;
+                const termLen = Math.min(4, totalBits - bits.length);
+                pushBits(0, termLen);
+
+                while (bits.length % 8 !== 0) bits.push(0);
+
+                const codewords = [];
+                for (let i = 0; i < bits.length; i += 8) {
+                    let byte = 0;
+                    for (let j = 0; j < 8; j++) byte = (byte << 1) | bits[i + j];
+                    codewords.push(byte);
+                }
+
+                const pads = [0xec, 0x11];
+                let pIdx = 0;
+                while (codewords.length < vInfo.totalData) {
+                    codewords.push(pads[pIdx % 2]);
+                    pIdx++;
+                }
+
+                const blockSize = Math.floor(vInfo.totalData / vInfo.blocks);
+                const extraBlocks = vInfo.totalData % vInfo.blocks;
+                const dataBlocks = [];
+                const ecBlocks = [];
+                let offset = 0;
+
+                for (let b = 0; b < vInfo.blocks; b++) {
+                    const len = blockSize + (b >= vInfo.blocks - extraBlocks ? 1 : 0);
+                    const slice = codewords.slice(offset, offset + len);
+                    offset += len;
+                    dataBlocks.push(slice);
+                    ecBlocks.push(computeRS(slice, vInfo.ecPerBlock));
+                }
+
+                const finalStream = [];
+                const maxDataLen = Math.max(...dataBlocks.map(b => b.length));
+                for (let i = 0; i < maxDataLen; i++) {
+                    for (let b = 0; b < vInfo.blocks; b++) {
+                        if (i < dataBlocks[b].length) finalStream.push(dataBlocks[b][i]);
+                    }
+                }
+                for (let i = 0; i < vInfo.ecPerBlock; i++) {
+                    for (let b = 0; b < vInfo.blocks; b++) {
+                        finalStream.push(ecBlocks[b][i]);
+                    }
+                }
+                return finalStream;
+            }
+
+            function createMatrix(vInfo, stream) {
+                const N = vInfo.size;
+                const mat = Array.from({ length: N }, () => new Array(N).fill(null));
+                const isFunc = Array.from({ length: N }, () => new Array(N).fill(false));
+
+                const setModule = (r, c, val, func = true) => {
+                    if (r >= 0 && r < N && c >= 0 && c < N) {
+                        mat[r][c] = val ? 1 : 0;
+                        if (func) isFunc[r][c] = true;
+                    }
+                };
+
+                const drawFinder = (r0, c0) => {
+                    for (let r = -1; r <= 7; r++) {
+                        for (let c = -1; c <= 7; c++) {
+                            const inOuter = r >= 0 && r <= 6 && c >= 0 && c <= 6;
+                            const inBorder = r === 0 || r === 6 || c === 0 || c === 6;
+                            const inCenter = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+                            setModule(r0 + r, c0 + c, inOuter && (inBorder || inCenter), true);
+                        }
+                    }
+                };
+                drawFinder(0, 0);
+                drawFinder(0, N - 7);
+                drawFinder(N - 7, 0);
+
+                if (vInfo.align.length > 0) {
+                    const pts = vInfo.align;
+                    for (let i = 0; i < pts.length; i++) {
+                        for (let j = 0; j < pts.length; j++) {
+                            const r = pts[i], c = pts[j];
+                            if (isFunc[r][c]) continue;
+                            for (let dr = -2; dr <= 2; dr++) {
+                                for (let dc = -2; dc <= 2; dc++) {
+                                    const dark = Math.abs(dr) === 2 || Math.abs(dc) === 2 || (dr === 0 && dc === 0);
+                                    setModule(r + dr, c + dc, dark, true);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                for (let i = 8; i < N - 8; i++) {
+                    if (!isFunc[6][i]) setModule(6, i, i % 2 === 0, true);
+                    if (!isFunc[i][6]) setModule(i, 6, i % 2 === 0, true);
+                }
+
+                setModule(N - 8, 8, 1, true);
+                for (let i = 0; i < 9; i++) {
+                    if (!isFunc[8][i]) setModule(8, i, 0, true);
+                    if (!isFunc[i][8]) setModule(i, 8, 0, true);
+                }
+                for (let i = 0; i < 8; i++) {
+                    if (!isFunc[8][N - 1 - i]) setModule(8, N - 1 - i, 0, true);
+                    if (!isFunc[N - 1 - i][8]) setModule(N - 1 - i, 8, 0, true);
+                }
+
+                if (vInfo.ver >= 7) {
+                    const vBits = VERSION_INFO_BITS[vInfo.ver];
+                    for (let i = 0; i < 18; i++) {
+                        const bit = (vBits >>> i) & 1;
+                        const r = Math.floor(i / 3);
+                        const c = N - 11 + (i % 3);
+                        setModule(r, c, bit, true);
+                        setModule(c, r, bit, true);
+                    }
+                }
+
+                const allBits = [];
+                for (const byte of stream) {
+                    for (let b = 7; b >= 0; b--) allBits.push((byte >>> b) & 1);
+                }
+
+                let bitIdx = 0;
+                let upward = true;
+                for (let col = N - 1; col >= 1; col -= 2) {
+                    if (col === 6) col--;
+                    for (let step = 0; step < N; step++) {
+                        const r = upward ? N - 1 - step : step;
+                        for (let dx = 0; dx < 2; dx++) {
+                            const c = col - dx;
+                            if (!isFunc[r][c]) {
+                                const rawBit = bitIdx < allBits.length ? allBits[bitIdx++] : 0;
+                                const masked = rawBit ^ ((r + c) % 2 === 0 ? 1 : 0);
+                                mat[r][c] = masked;
+                            }
+                        }
+                    }
+                    upward = !upward;
+                }
+
+                const fmtBits = 0x77c4;
+                const coords1 = [
+                    [8,0],[8,1],[8,2],[8,3],[8,4],[8,5],[8,7],[8,8],
+                    [7,8],[5,8],[4,8],[3,8],[2,8],[1,8],[0,8]
+                ];
+                const coords2 = [
+                    [N-1,8],[N-2,8],[N-3,8],[N-4,8],[N-5,8],[N-6,8],[N-7,8],
+                    [8,N-8],[8,N-7],[8,N-6],[8,N-5],[8,N-4],[8,N-3],[8,N-2],[8,N-1]
+                ];
+                for (let i = 0; i < 15; i++) {
+                    const bit = (fmtBits >>> (14 - i)) & 1;
+                    mat[coords1[i][0]][coords1[i][1]] = bit;
+                    mat[coords2[i][0]][coords2[i][1]] = bit;
+                }
+
+                return mat;
+            }
+
+            function generateMatrix(text) {
+                const bytes = toUTF8Bytes(text);
+                const vInfo = selectVersion(bytes.length);
+                const stream = buildCodewords(bytes, vInfo);
+                return createMatrix(vInfo, stream);
+            }
+
+            function toSVG(text) {
+                try {
+                    const mat = generateMatrix(text);
+                    const N = mat.length;
+                    const quiet = 4;
+                    const total = N + quiet * 2;
+                    let path = '';
+                    for (let r = 0; r < N; r++) {
+                        for (let c = 0; c < N; c++) {
+                            if (mat[r][c] === 1) {
+                                path += `M${c + quiet},${r + quiet}h1v1h-1z`;
+                            }
+                        }
+                    }
+                    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" shape-rendering="crispEdges">
+                        <rect width="${total}" height="${total}" fill="#ffffff"/>
+                        <path d="${path}" fill="#000000"/>
+                    </svg>`;
+                } catch (e) {
+                    console.error('QR SVG oluşturma hatası:', e);
+                    return '<div class="text-xs text-red-600 font-bold p-2">QR Hatası</div>';
+                }
+            }
+
+            function toDataURL(text, scale = 12) {
+                const mat = generateMatrix(text);
+                const N = mat.length;
+                const quiet = 4;
+                const total = N + quiet * 2;
+                const canvas = document.createElement('canvas');
+                canvas.width = total * scale;
+                canvas.height = total * scale;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#000000';
+                for (let r = 0; r < N; r++) {
+                    for (let c = 0; c < N; c++) {
+                        if (mat[r][c] === 1) {
+                            ctx.fillRect((c + quiet) * scale, (r + quiet) * scale, scale, scale);
+                        }
+                    }
+                }
+                return canvas.toDataURL('image/png');
+            }
+
+            return { toSVG, toDataURL };
+        })();
+    </script>
+
+    <!-- ===================================================================== -->
+    <!-- UYGULAMA İŞ MANTIKLARI VE VERİ YÖNETİMİ                               -->
+    <!-- ===================================================================== -->
+    <script>
+        const STORAGE_KEY = 'zeytin_fabrika_veriler_v3';
+        const COUNTER_KEY = 'zeytin_fabrika_sayac_v3';
+
+        let records = [];
+        let batchCounter = 1;
+        let selectedRecordId = null;
+        let modalRecordId = null;
+        let pendingDeleteId = null;
+        let editingRecordId = null;
+        let pendingUpdatePayload = null;
+        let activeTrackingParams = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRecords();
+            startLiveClock();
+            updateBatchBadge();
+            updateStats();
+            renderTable();
+
+            if (records.length > 0) {
+                showLivePreview(records[0].id);
+            }
+
+            document.getElementById('searchInput').addEventListener('input', renderTable);
+            document.getElementById('statusFilter').addEventListener('change', renderTable);
+
+            checkUrlForTracking();
+        });
+
+        // QR Kodun İçine Yazılacak URL ve Parametreleri Oluştur
+        function createQRText(rec) {
+            const baseUrl = window.location.href.split('#')[0].split('?')[0];
+            const params = new URLSearchParams();
+            params.set('takip', '1');
+            params.set('parti', rec.batchNo);
+            params.set('ad', rec.name);
+            params.set('kg', String(rec.weight));
+            params.set('tur', rec.type);
+            params.set('durum', rec.status);
+            if (rec.date) params.set('tarih', rec.date);
+            if (rec.notes) params.set('kasa', rec.notes);
+
+            // Çok uzun veya sandboxed URL'lerde QR versiyon kapasitesini aşmamak için kontrol
+            const fullUrl = `${baseUrl}?${params.toString()}`;
+            if (baseUrl.startsWith('http') && fullUrl.length <= 420) {
+                return fullUrl;
+            }
+            return `?${params.toString()}`;
+        }
+
+        // Sayfa Açılışında ?takip=1 Parametresi Varsa Müşteri Takip Ekranını Aç
+        function checkUrlForTracking() {
+            let searchStr = window.location.search;
+            if (!searchStr && window.location.hash.includes('?')) {
+                searchStr = window.location.hash.substring(window.location.hash.indexOf('?'));
+            }
+            const params = new URLSearchParams(searchStr);
+            if (params.get('takip') === '1' && params.get('parti')) {
+                activeTrackingParams = {
+                    batchNo: params.get('parti'),
+                    name: params.get('ad') || params.get('musteri') || 'Değerli Müşterimiz',
+                    weight: params.get('kg') || '0',
+                    type: normalizeOliveType(params.get('tur') || params.get('cins')),
+                    status: params.get('durum') || 'Bekliyor',
+                    date: params.get('tarih') || '',
+                    notes: params.get('kasa') || params.get('not') || ''
+                };
+                renderCustomerTrackingCard(activeTrackingParams);
+                const view = document.getElementById('customer-tracking-view');
+                view.classList.remove('hidden');
+                view.classList.add('flex');
+            }
+        }
+
+        function openCustomerTracking(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+            closeReceiptModal();
+
+            activeTrackingParams = {
+                batchNo: rec.batchNo,
+                name: rec.name,
+                weight: String(rec.weight),
+                type: rec.type,
+                status: rec.status,
+                date: rec.date,
+                notes: rec.notes || ''
+            };
+
+            const qrUrl = createQRText(rec);
+            try {
+                window.history.replaceState(null, '', qrUrl);
+            } catch (e) {}
+
+            renderCustomerTrackingCard(activeTrackingParams);
+            const view = document.getElementById('customer-tracking-view');
+            view.classList.remove('hidden');
+            view.classList.add('flex');
+        }
+
+        function renderCustomerTrackingCard(fallbackData) {
+            loadRecords();
+            const liveRec = records.find(r => r.batchNo === fallbackData.batchNo);
+            const data = liveRec ? {
+                batchNo: liveRec.batchNo,
+                name: liveRec.name,
+                weight: String(liveRec.weight),
+                type: liveRec.type,
+                status: liveRec.status,
+                date: liveRec.date,
+                notes: liveRec.notes || ''
+            } : fallbackData;
+
+            document.getElementById('ct-batch').textContent = data.batchNo;
+            document.getElementById('ct-name').textContent = data.name;
+            document.getElementById('ct-weight').textContent = `${data.weight} KG`;
+            document.getElementById('ct-type').textContent = data.type;
+            document.getElementById('ct-date').textContent = data.date;
+
+            const notesBox = document.getElementById('ct-notes-box');
+            if (data.notes) {
+                notesBox.classList.remove('hidden');
+                document.getElementById('ct-notes').textContent = data.notes;
+            } else {
+                notesBox.classList.add('hidden');
+            }
+
+            const banner = document.getElementById('ct-status-banner');
+            const iconBox = document.getElementById('ct-status-icon');
+            const badge = document.getElementById('ct-status-badge');
+            const desc = document.getElementById('ct-status-desc');
+            const progress = document.getElementById('ct-progress-bar');
+            const stepText = document.getElementById('ct-step-text');
+
+            const s1 = document.getElementById('ct-step-1');
+            const s2 = document.getElementById('ct-step-2');
+            const s3 = document.getElementById('ct-step-3');
+
+            [s1, s2, s3].forEach(el => {
+                el.className = 'p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-400 transition';
+                el.querySelector('.step-dot').className = 'w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot bg-slate-200 text-slate-500';
+            });
+
+            if (data.status === 'Sıkımda') {
+                banner.className = 'rounded-2xl p-5 border-2 border-blue-400 bg-blue-50 text-blue-950 text-center space-y-2 transition-all';
+                iconBox.className = 'inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-1 bg-blue-600 text-white shadow-md animate-pulse';
+                iconBox.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>`;
+                badge.textContent = 'ŞU AN SIKIMDA';
+                desc.textContent = 'Zeytininiz şu anda sıkım hattındadır. İşlem tamamlandığında buradan görebilirsiniz.';
+                progress.style.width = '68%';
+                progress.className = 'h-full bg-blue-600 transition-all duration-500 rounded-full';
+                stepText.textContent = 'Aşama 2 / 3';
+
+                s1.className = 'p-2.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 transition';
+                s1.querySelector('.step-dot').className = 'w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot bg-emerald-600 text-white';
+
+                s2.className = 'p-2.5 rounded-xl border-2 border-blue-500 bg-blue-50 text-blue-950 shadow-xs transition';
+                s2.querySelector('.step-dot').className = 'w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot bg-blue-600 text-white';
+            } else if (data.status === 'Tamamlandı') {
+                banner.className = 'rounded-2xl p-5 border-2 border-emerald-400 bg-emerald-50 text-emerald-950 text-center space-y-2 transition-all';
+                iconBox.className = 'inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-1 bg-emerald-600 text-white shadow-md';
+                iconBox.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>`;
+                badge.textContent = 'SIKIM TAMAMLANDI';
+                desc.textContent = 'Sıkım işleminiz tamamlanmıştır, zeytinyağınızı teslim alabilirsiniz.';
+                progress.style.width = '100%';
+                progress.className = 'h-full bg-emerald-600 transition-all duration-500 rounded-full';
+                stepText.textContent = 'Aşama 3 / 3';
+
+                [s1, s2, s3].forEach(el => {
+                    el.className = 'p-2.5 rounded-xl border border-emerald-400 bg-emerald-50 text-emerald-900 transition';
+                    el.querySelector('.step-dot').className = 'w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot bg-emerald-600 text-white';
+                });
+            } else {
+                banner.className = 'rounded-2xl p-5 border-2 border-amber-400 bg-amber-50 text-amber-950 text-center space-y-2 transition-all';
+                iconBox.className = 'inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-1 bg-amber-500 text-slate-950 shadow-md';
+                iconBox.innerHTML = `<svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 3"/></svg>`;
+                badge.textContent = 'SIRADA / BEKLİYOR';
+                desc.textContent = 'Zeytininiz sıkım sırası beklemektedir. Sıranız geldiğinde durum otomatik güncellenecektir.';
+                progress.style.width = '33%';
+                progress.className = 'h-full bg-amber-500 transition-all duration-500 rounded-full';
+                stepText.textContent = 'Aşama 1 / 3';
+
+                s1.className = 'p-2.5 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-950 shadow-xs transition';
+                s1.querySelector('.step-dot').className = 'w-7 h-7 mx-auto rounded-full flex items-center justify-center font-black text-xs mb-1 step-dot bg-amber-500 text-slate-950';
+            }
+
+            const nowTime = new Date().toLocaleTimeString('tr-TR');
+            document.getElementById('ct-last-checked').textContent = `Son güncelleme: ${nowTime}`;
+        }
+
+        function refreshCustomerTracking() {
+            if (!activeTrackingParams) return;
+            renderCustomerTrackingCard(activeTrackingParams);
+            showToast('Zeytin sıkım durumu güncellendi.', 'success');
+        }
+
+        function exitCustomerTracking() {
+            activeTrackingParams = null;
+            const view = document.getElementById('customer-tracking-view');
+            view.classList.add('hidden');
+            view.classList.remove('flex');
+            try {
+                const cleanUrl = window.location.href.split('#')[0].split('?')[0];
+                window.history.replaceState(null, '', cleanUrl);
+            } catch (e) {}
+        }
+
+        function normalizeOliveType(rawType) {
+            if (!rawType) return 'Soğuk Sıkım';
+            return String(rawType).toLowerCase().includes('normal') || String(rawType).toLowerCase().includes('sıcak')
+                ? 'Normal Sıkım'
+                : 'Soğuk Sıkım';
+        }
+
+        function loadRecords() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                const cnt = localStorage.getItem(COUNTER_KEY);
+                if (raw) {
+                    records = JSON.parse(raw).map(r => ({
+                        ...r,
+                        type: normalizeOliveType(r.type)
+                    }));
+                } else {
+                    const nowStr = formatDate(new Date());
+                    records = [
+                        {
+                            id: 'init-1',
+                            batchNo: 'ZYT-2026-001',
+                            name: 'Ahmet Yılmaz',
+                            phone: '0532 450 12 34',
+                            weight: 480,
+                            type: 'Soğuk Sıkım',
+                            notes: '14 plastik kasa',
+                            date: nowStr,
+                            status: 'Sıkımda'
+                        }
+                    ];
+                    batchCounter = 2;
+                    saveRecords();
+                }
+                if (cnt) batchCounter = parseInt(cnt, 10);
+            } catch (err) {
+                records = [];
+            }
+        }
+
+        function saveRecords() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+                localStorage.setItem(COUNTER_KEY, String(batchCounter));
+            } catch (err) {
+                showToast('Tarayıcı hafızasına kayıt yapılamadı.', 'error');
+            }
+        }
+
+        function formatBatchNo(num) {
+            const year = new Date().getFullYear();
+            return `ZYT-${year}-${String(num).padStart(3, '0')}`;
+        }
+
+        function updateBatchBadge() {
+            document.getElementById('next-batch-badge').textContent = formatBatchNo(batchCounter);
+        }
+
+        function formatDate(d) {
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            const hh = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${dd}.${mm}.${yyyy} ${hh}:${min}`;
+        }
+
+        // YENİ KAYIT FORMU GÖNDERİMİ
+        document.getElementById('olive-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const nameEl = document.getElementById('customerName');
+            const weightEl = document.getElementById('oliveWeight');
+            const phoneEl = document.getElementById('customerPhone');
+            const crateEl = document.getElementById('crateCount');
+            const selectedTypeEl = document.querySelector('input[name="oliveType"]:checked');
+
+            const name = nameEl.value.trim();
+            const weight = parseFloat(weightEl.value);
+            const oliveType = selectedTypeEl ? selectedTypeEl.value : 'Soğuk Sıkım';
+
+            if (!name || isNaN(weight) || weight <= 0) {
+                showToast('Lütfen müşteri adı ve geçerli zeytin miktarı giriniz.', 'error');
+                return;
+            }
+
+            const newRec = {
+                id: 'rec-' + Date.now(),
+                batchNo: formatBatchNo(batchCounter),
+                name: name,
+                phone: phoneEl.value.trim(),
+                weight: weight,
+                type: oliveType,
+                notes: crateEl.value.trim(),
+                date: formatDate(new Date()),
+                status: 'Bekliyor'
+            };
+
+            records.unshift(newRec);
+            batchCounter++;
+            saveRecords();
+
+            updateBatchBadge();
+            updateStats();
+            renderTable();
+            showLivePreview(newRec.id);
+
+            nameEl.value = '';
+            weightEl.value = '';
+            phoneEl.value = '';
+            crateEl.value = '';
+            nameEl.focus();
+
+            showToast(`${newRec.batchNo} - ${newRec.name} kaydedildi ve QR kodu üretildi!`, 'success');
+        });
+
+        function showLivePreview(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+
+            selectedRecordId = id;
+            document.getElementById('preview-empty').classList.add('hidden');
+            document.getElementById('preview-content').classList.remove('hidden');
+
+            document.getElementById('prev-batch').textContent = rec.batchNo;
+            document.getElementById('prev-name').textContent = rec.name;
+            document.getElementById('prev-type').textContent = rec.notes ? `${rec.type} • ${rec.notes}` : rec.type;
+            document.getElementById('prev-weight').textContent = `${rec.weight} KG`;
+            document.getElementById('prev-date').textContent = rec.date;
+
+            const pill = document.getElementById('prev-status-pill');
+            pill.textContent = rec.status;
+            if (rec.status === 'Sıkımda') {
+                pill.className = 'inline-block bg-blue-100 text-blue-900 text-[11px] font-extrabold px-2 py-0.5 rounded';
+            } else if (rec.status === 'Tamamlandı') {
+                pill.className = 'inline-block bg-emerald-100 text-emerald-900 text-[11px] font-extrabold px-2 py-0.5 rounded';
+            } else {
+                pill.className = 'inline-block bg-amber-100 text-amber-900 text-[11px] font-extrabold px-2 py-0.5 rounded';
+            }
+
+            document.getElementById('prev-qr-box').innerHTML = PureQR.toSVG(createQRText(rec));
+        }
+
+        function downloadQRAsPNG(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+
+            const dataUrl = PureQR.toDataURL(createQRText(rec), 14);
+            const link = document.createElement('a');
+            const safeName = rec.name.replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ]/g, '_');
+            link.download = `${rec.batchNo}_${safeName}_QR.png`;
+            link.href = dataUrl;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast(`${rec.batchNo} QR kodu PNG olarak indirildi.`, 'success');
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('records-tbody');
+            const emptyState = document.getElementById('empty-table-state');
+            const q = document.getElementById('searchInput').value.toLowerCase().trim();
+            const statusF = document.getElementById('statusFilter').value;
+
+            const filtered = records.filter(r => {
+                const matchText = r.name.toLowerCase().includes(q) ||
+                                  r.batchNo.toLowerCase().includes(q) ||
+                                  (r.phone && r.phone.includes(q));
+                const matchStatus = statusF === 'ALL' || r.status === statusF;
+                return matchText && matchStatus;
+            });
+
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            filtered.forEach(rec => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-olive-50/70 transition';
+
+                let badgeStyle = 'bg-amber-100 text-amber-900 border-amber-300';
+                if (rec.status === 'Sıkımda') badgeStyle = 'bg-blue-100 text-blue-900 border-blue-300';
+                if (rec.status === 'Tamamlandı') badgeStyle = 'bg-emerald-100 text-emerald-900 border-emerald-300';
+
+                const miniQR = PureQR.toSVG(createQRText(rec));
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4">
+                        <button type="button" onclick="openReceiptModal('${rec.id}')" title="Büyüt ve Yazdır"
+                            class="qr-wrapper w-12 h-12 bg-white p-1 border border-slate-300 rounded-lg shadow-xs hover:scale-110 transition cursor-pointer">
+                            ${miniQR}
+                        </button>
+                    </td>
+                    <td class="py-3 px-4 font-mono font-extrabold text-olive-800 whitespace-nowrap">
+                        ${rec.batchNo}
+                    </td>
+                    <td class="py-3 px-4">
+                        <div class="font-bold text-slate-900">${escapeHtml(rec.name)}</div>
+                        <div class="text-xs text-slate-500">${escapeHtml(rec.phone || rec.date)}</div>
+                    </td>
+                    <td class="py-3 px-4 whitespace-nowrap">
+                        <span class="font-black text-base text-olive-800">${rec.weight}</span> <span class="text-xs font-bold text-slate-500">kg</span>
+                    </td>
+                    <td class="py-3 px-4 text-xs text-slate-600">
+                        <div class="flex items-center gap-1.5">
+                            <span class="font-extrabold px-2 py-0.5 rounded-md ${rec.type === 'Soğuk Sıkım' ? 'bg-cyan-100 text-cyan-900 border border-cyan-300' : 'bg-amber-100 text-amber-900 border border-amber-300'}">
+                                ${escapeHtml(rec.type)}
+                            </span>
+                            <button type="button" onclick="promptQuickTypeChange('${rec.id}')" title="Sıkım türünü onaylı değiştir"
+                                class="text-[11px] font-bold text-olive-700 hover:text-olive-950 underline px-1 cursor-pointer">
+                                Değiştir
+                            </button>
+                        </div>
+                        ${rec.notes ? `<div class="text-slate-400 truncate max-w-[200px] mt-1">${escapeHtml(rec.notes)}</div>` : ''}
+                    </td>
+                    <td class="py-3 px-4 whitespace-nowrap">
+                        <select onchange="changeStatus('${rec.id}', this.value)"
+                            class="text-xs font-bold px-2.5 py-1.5 rounded-lg border cursor-pointer outline-none ${badgeStyle}">
+                            <option value="Bekliyor" ${rec.status === 'Bekliyor' ? 'selected' : ''}>Bekliyor</option>
+                            <option value="Sıkımda" ${rec.status === 'Sıkımda' ? 'selected' : ''}>Sıkımda</option>
+                            <option value="Tamamlandı" ${rec.status === 'Tamamlandı' ? 'selected' : ''}>Tamamlandı</option>
+                        </select>
+                    </td>
+                    <td class="py-3 px-4 text-right whitespace-nowrap">
+                        <div class="inline-flex items-center gap-1.5">
+                            <button type="button" onclick="openEditModal('${rec.id}')"
+                                class="bg-slate-800 hover:bg-slate-900 text-white px-2.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer"
+                                title="Düzenle / Sıkım Değiştir">
+                                Düzenle
+                            </button>
+                            <button type="button" onclick="openCustomerTracking('${rec.id}')"
+                                class="bg-emerald-700 hover:bg-emerald-800 text-white px-2.5 py-2 rounded-lg text-xs font-bold transition cursor-pointer"
+                                title="Müşteri Takip Ekranını Önizle">
+                                Takip Gör
+                            </button>
+                            <button type="button" onclick="openReceiptModal('${rec.id}')"
+                                class="bg-olive-700 hover:bg-olive-800 text-white px-3 py-2 rounded-lg text-xs font-bold transition cursor-pointer">
+                                Fiş / QR
+                            </button>
+                            <button type="button" onclick="downloadQRAsPNG('${rec.id}')"
+                                class="bg-slate-100 hover:bg-slate-200 text-slate-800 px-2.5 py-2 rounded-lg text-xs font-bold border border-slate-300 transition cursor-pointer"
+                                title="QR PNG İndir">
+                                İndir
+                            </button>
+                            <button type="button" onclick="askDelete('${rec.id}')"
+                                class="bg-red-50 hover:bg-red-100 text-red-600 px-2.5 py-2 rounded-lg text-xs font-bold border border-red-200 transition cursor-pointer"
+                                title="Sil">
+                                Sil
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function changeStatus(id, newStatus) {
+            const idx = records.findIndex(r => r.id === id);
+            if (idx === -1) return;
+            records[idx].status = newStatus;
+            saveRecords();
+            updateStats();
+            renderTable();
+            if (selectedRecordId === id) {
+                showLivePreview(id);
+            }
+            showToast(`${records[idx].batchNo} durumu "${newStatus}" yapıldı.`, 'info');
+        }
+
+        function updateStats() {
+            const totalKg = records.reduce((acc, r) => acc + (parseFloat(r.weight) || 0), 0);
+            const waiting = records.filter(r => r.status === 'Bekliyor').length;
+            const pressing = records.filter(r => r.status === 'Sıkımda').length;
+            const done = records.filter(r => r.status === 'Tamamlandı').length;
+
+            document.getElementById('stat-total-kg').textContent = totalKg.toLocaleString('tr-TR');
+            document.getElementById('stat-waiting-count').textContent = waiting;
+            document.getElementById('stat-pressing-count').textContent = pressing;
+            document.getElementById('stat-done-count').textContent = done;
+        }
+
+        function openReceiptModal(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+
+            modalRecordId = id;
+            showLivePreview(id);
+
+            document.getElementById('m-batch').textContent = rec.batchNo;
+            document.getElementById('m-date').textContent = rec.date;
+            document.getElementById('m-name').textContent = rec.name;
+            document.getElementById('m-type').textContent = rec.type;
+            document.getElementById('m-weight').textContent = `${rec.weight} KG`;
+
+            const phoneRow = document.getElementById('m-phone-row');
+            if (rec.phone) {
+                phoneRow.classList.remove('hidden');
+                document.getElementById('m-phone').textContent = rec.phone;
+            } else {
+                phoneRow.classList.add('hidden');
+            }
+
+            const notesEl = document.getElementById('m-notes');
+            notesEl.textContent = rec.notes ? `Kasa/Çuval: ${rec.notes}` : '';
+
+            document.getElementById('m-qr-box').innerHTML = PureQR.toSVG(createQRText(rec));
+
+            const modal = document.getElementById('receipt-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeReceiptModal() {
+            const modal = document.getElementById('receipt-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // =====================================================================
+        // KAYIT DÜZENLEME & ONAYLI GÜNCELLEME AKIŞI
+        // =====================================================================
+        function openEditModal(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+
+            closeReceiptModal();
+            editingRecordId = id;
+
+            document.getElementById('edit-batch-subtitle').textContent = rec.batchNo;
+            document.getElementById('editCustomerName').value = rec.name;
+            document.getElementById('editOliveWeight').value = rec.weight;
+            document.getElementById('editCustomerPhone').value = rec.phone || '';
+            document.getElementById('editCrateCount').value = rec.notes || '';
+
+            const normalizedType = normalizeOliveType(rec.type);
+            const radioToSelect = document.querySelector(`input[name="editOliveType"][value="${normalizedType}"]`);
+            if (radioToSelect) radioToSelect.checked = true;
+
+            const modal = document.getElementById('edit-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeEditModal() {
+            editingRecordId = null;
+            const modal = document.getElementById('edit-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function promptQuickTypeChange(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+
+            const currentType = normalizeOliveType(rec.type);
+            const targetType = currentType === 'Soğuk Sıkım' ? 'Normal Sıkım' : 'Soğuk Sıkım';
+
+            openConfirmUpdateModal(rec, {
+                name: rec.name,
+                weight: rec.weight,
+                phone: rec.phone || '',
+                type: targetType,
+                notes: rec.notes || ''
+            });
+        }
+
+        document.getElementById('edit-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!editingRecordId) return;
+
+            const rec = records.find(r => r.id === editingRecordId);
+            if (!rec) return;
+
+            const selectedEditType = document.querySelector('input[name="editOliveType"]:checked');
+            const updated = {
+                name: document.getElementById('editCustomerName').value.trim(),
+                weight: parseFloat(document.getElementById('editOliveWeight').value),
+                phone: document.getElementById('editCustomerPhone').value.trim(),
+                type: selectedEditType ? selectedEditType.value : 'Soğuk Sıkım',
+                notes: document.getElementById('editCrateCount').value.trim()
+            };
+
+            if (!updated.name || isNaN(updated.weight) || updated.weight <= 0) {
+                showToast('Lütfen geçerli müşteri adı ve zeytin miktarı giriniz.', 'error');
+                return;
+            }
+
+            const hasChanges =
+                rec.name !== updated.name ||
+                Number(rec.weight) !== Number(updated.weight) ||
+                (rec.phone || '') !== updated.phone ||
+                normalizeOliveType(rec.type) !== updated.type ||
+                (rec.notes || '') !== updated.notes;
+
+            if (!hasChanges) {
+                showToast('Herhangi bir değişiklik yapılmadı.', 'info');
+                closeEditModal();
+                return;
+            }
+
+            closeEditModal();
+            openConfirmUpdateModal(rec, updated);
+        });
+
+        function openConfirmUpdateModal(oldRec, newValues) {
+            pendingUpdatePayload = {
+                id: oldRec.id,
+                batchNo: oldRec.batchNo,
+                newValues
+            };
+
+            document.getElementById('confirm-update-batch').textContent = `${oldRec.batchNo} - ${oldRec.name}`;
+
+            const diffs = [];
+            if (oldRec.name !== newValues.name) {
+                diffs.push({ label: 'Müşteri Adı', oldVal: oldRec.name, newVal: newValues.name });
+            }
+            if (Number(oldRec.weight) !== Number(newValues.weight)) {
+                diffs.push({ label: 'Zeytin Miktarı', oldVal: `${oldRec.weight} KG`, newVal: `${newValues.weight} KG` });
+            }
+            if (normalizeOliveType(oldRec.type) !== newValues.type) {
+                diffs.push({ label: 'Sıkım Türü', oldVal: normalizeOliveType(oldRec.type), newVal: newValues.type, highlight: true });
+            }
+            if ((oldRec.phone || '') !== newValues.phone) {
+                diffs.push({ label: 'Telefon', oldVal: oldRec.phone || '(Boş)', newVal: newValues.phone || '(Boş)' });
+            }
+            if ((oldRec.notes || '') !== newValues.notes) {
+                diffs.push({ label: 'Kasa / Çuval', oldVal: oldRec.notes || '(Boş)', newVal: newValues.notes || '(Boş)' });
+            }
+
+            const listEl = document.getElementById('confirm-diff-list');
+            listEl.innerHTML = diffs.map(d => `
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 pb-2 border-b border-olive-200/70 last:border-none last:pb-0">
+                    <span class="font-extrabold text-slate-600">${escapeHtml(d.label)}:</span>
+                    <div class="flex items-center gap-2 font-bold">
+                        <span class="line-through text-slate-400">${escapeHtml(d.oldVal)}</span>
+                        <span class="text-olive-700">→</span>
+                        <span class="${d.highlight ? 'bg-amber-200 text-slate-950 px-2 py-0.5 rounded font-black' : 'text-emerald-800 font-extrabold'}">
+                            ${escapeHtml(d.newVal)}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+
+            const chk = document.getElementById('confirm-update-checkbox');
+            chk.checked = false;
+            document.getElementById('apply-update-btn').disabled = true;
+
+            const modal = document.getElementById('confirm-update-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function toggleConfirmUpdateBtn() {
+            const chk = document.getElementById('confirm-update-checkbox');
+            document.getElementById('apply-update-btn').disabled = !chk.checked;
+        }
+
+        function closeConfirmUpdateModal() {
+            pendingUpdatePayload = null;
+            const modal = document.getElementById('confirm-update-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function applyPendingUpdate() {
+            if (!pendingUpdatePayload) return;
+
+            const idx = records.findIndex(r => r.id === pendingUpdatePayload.id);
+            if (idx === -1) {
+                closeConfirmUpdateModal();
+                return;
+            }
+
+            const { newValues } = pendingUpdatePayload;
+            records[idx] = {
+                ...records[idx],
+                name: newValues.name,
+                weight: newValues.weight,
+                phone: newValues.phone,
+                type: newValues.type,
+                notes: newValues.notes
+            };
+
+            saveRecords();
+            updateStats();
+            renderTable();
+
+            if (selectedRecordId === records[idx].id) {
+                showLivePreview(records[idx].id);
+            }
+            if (activeTrackingParams && activeTrackingParams.batchNo === records[idx].batchNo) {
+                renderCustomerTrackingCard(activeTrackingParams);
+            }
+
+            const updatedBatch = records[idx].batchNo;
+            closeConfirmUpdateModal();
+            showToast(`${updatedBatch} kaydı onayınızla güncellendi ve QR kod yenilendi.`, 'success');
+        }
+
+        function askDelete(id) {
+            const rec = records.find(r => r.id === id);
+            if (!rec) return;
+            pendingDeleteId = id;
+            document.getElementById('delete-msg').textContent =
+                `"${rec.batchNo} - ${rec.name} (${rec.weight} kg)" kaydı kalıcı olarak silinecek.`;
+            const modal = document.getElementById('delete-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeDeleteModal() {
+            pendingDeleteId = null;
+            const modal = document.getElementById('delete-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        document.getElementById('confirm-del-btn').addEventListener('click', () => {
+            if (!pendingDeleteId) return;
+            records = records.filter(r => r.id !== pendingDeleteId);
+            saveRecords();
+            updateStats();
+            renderTable();
+
+            if (selectedRecordId === pendingDeleteId) {
+                selectedRecordId = null;
+                if (records.length > 0) {
+                    showLivePreview(records[0].id);
+                } else {
+                    document.getElementById('preview-content').classList.add('hidden');
+                    document.getElementById('preview-empty').classList.remove('hidden');
+                }
+            }
+            closeDeleteModal();
+            showToast('Kayıt silindi.', 'info');
+        });
+
+        function exportToCSV() {
+            if (records.length === 0) {
+                showToast('Dışa aktarılacak kayıt yok.', 'error');
+                return;
+            }
+            const headers = ['Parti No', 'Müşteri Adı Soyadı', 'Telefon', 'Zeytin Miktarı (kg)', 'Sıkım Türü', 'Tarih', 'Durum', 'Kasa/Çuval'];
+            const rows = records.map(r => [
+                r.batchNo,
+                `"${(r.name || '').replace(/"/g, '""')}"`,
+                `"${(r.phone || '').replace(/"/g, '""')}"`,
+                r.weight,
+                `"${(r.type || '').replace(/"/g, '""')}"`,
+                r.date,
+                r.status,
+                `"${(r.notes || '').replace(/"/g, '""')}"`
+            ]);
+            const csv = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Zeytin_Sikimhane_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Excel (CSV) raporu indirildi.', 'success');
+        }
+
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            const colors = type === 'error'
+                ? 'bg-red-700 text-white border-red-500'
+                : type === 'info'
+                    ? 'bg-slate-800 text-white border-slate-600'
+                    : 'bg-olive-800 text-white border-olive-600';
+
+            el.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg border text-sm font-bold transition-all duration-300 ${colors}`;
+            el.textContent = msg;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 300);
+            }, 3000);
+        }
+
+        function startLiveClock() {
+            const update = () => {
+                const now = new Date();
+                const dd = String(now.getDate()).padStart(2, '0');
+                const mm = String(now.getMonth() + 1).padStart(2, '0');
+                const yyyy = now.getFullYear();
+                document.getElementById('live-date').textContent = `${dd}.${mm}.${yyyy}`;
+                document.getElementById('live-clock').textContent = now.toLocaleTimeString('tr-TR');
+            };
+            update();
+            setInterval(update, 1000);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
