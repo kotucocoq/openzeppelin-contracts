@@ -1,21 +1,41 @@
-const ethSigUtil = require('eth-sig-util');
+import { ethers } from 'ethers';
+import { EIP712Domain } from './eip712-types';
 
-const EIP712Domain = [
-  { name: 'name', type: 'string' },
-  { name: 'version', type: 'string' },
-  { name: 'chainId', type: 'uint256' },
-  { name: 'verifyingContract', type: 'address' },
-];
+export * from './eip712-types';
 
-async function domainSeparator (name, version, chainId, verifyingContract) {
-  return '0x' + ethSigUtil.TypedDataUtils.hashStruct(
-    'EIP712Domain',
-    { name, version, chainId, verifyingContract },
-    { EIP712Domain },
-  ).toString('hex');
+export async function getDomain(contract) {
+  const { fields, name, version, chainId, verifyingContract, salt, extensions } = await contract.eip712Domain();
+
+  if (extensions.length > 0) {
+    throw Error('Extensions not implemented');
+  }
+
+  const domain = {
+    name,
+    version,
+    chainId,
+    verifyingContract,
+    salt,
+  };
+
+  for (const [i, { name }] of EIP712Domain.entries()) {
+    if (!(fields & (1 << i))) {
+      delete domain[name];
+    }
+  }
+
+  return domain;
 }
 
-module.exports = {
-  EIP712Domain,
-  domainSeparator,
-};
+export function domainType(domain) {
+  return EIP712Domain.filter(({ name }) => domain[name] !== undefined);
+}
+
+export const domainSeparator = ethers.TypedDataEncoder.hashDomain;
+
+export function hashTypedData(domain, structHash) {
+  return ethers.solidityPackedKeccak256(
+    ['bytes', 'bytes32', 'bytes32'],
+    ['0x1901', ethers.TypedDataEncoder.hashDomain(domain), structHash],
+  );
+}

@@ -1,10 +1,22 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+shopt -s globstar
 
 # cross platform `mkdir -p`
-node -e 'fs.mkdirSync("build/contracts", { recursive: true })'
+mkdirp() {
+  node -e "fs.mkdirSync('$1', { recursive: true })"
+}
 
-cp artifacts/*.json build/contracts
+# cd to the root of the repo
+cd "$(git rev-parse --show-toplevel)"
 
+npm run clean
+
+env COMPILE_MODE=production npx hardhat build --noExpose
+
+mkdirp contracts/build/contracts
+cp artifacts/contracts/**/*.json contracts/build/contracts
 node scripts/remove-ignored-artifacts.js
+
+cp README.md contracts/
